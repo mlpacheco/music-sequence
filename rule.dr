@@ -1,0 +1,29 @@
+label: "ArtistLabel", classes: 3924, type: LabelType.Multiclass;
+
+dbmodule: "music_db";
+dbclass: "MusicDB";
+
+femodule: "music_fe";
+feclass: "MusicFE";
+
+
+ruleset {
+
+    rule: InPlaylist(U, B) => PlayedNext(U,B,C^ArtistLabel?),
+    lambda: 1.0,
+    network: "config.json",
+    fefunctions: [vector("current_artist")],
+    dbfunction: "curr_next",
+    target: B;
+
+    rule: PlayedNext(U,A,B)^? => PlayedNext(U,B,C^ArtistLabel?),
+    lambda: 1.0,
+    network: "config.json",
+    fefunctions: [vector("artist_1"), vector("artist_2")],
+    dbfunction: "prev_curr_next",
+    target: B;
+
+    //hardconstr: PlayedNext(U,D,E) => PlayedNext(U,D,E),
+    //dbfunction: "bla";
+
+} groupby: InPlaylist.1;
