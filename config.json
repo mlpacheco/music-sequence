@@ -1,0 +1,29 @@
+{
+  "models": [
+      {
+        "model": "FeedForwardNetwork",
+        "module": "nn_feedforward",
+        "layers": [
+          {
+            "ltype": "Dense",
+            "n_hidden": 100,
+            "act_func": "relu"
+          },
+          {
+            "ltype": "Dense",
+            "act_func": "softmax"
+          }
+        ],
+        "learning_rate": 0.5,
+        "patience": 15,
+        "gradient_method": "SGD",
+        "batch_size": 100,
+        "momentum": 0.9,
+        "epsilon": 0.000001,
+        "rho": 0.000001,
+        "weighted_examples": true,
+        "measurement": "acc",
+        "use_gpu": false
+      }
+  ]
+}

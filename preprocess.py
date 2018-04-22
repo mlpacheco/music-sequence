@@ -11,8 +11,6 @@ with open('data/artist_map.csv') as csvfile:
     for row in reader:
         artist_map[row[0]] = row[1]
 
-        print row[1]
-
         try:
             summaries[row[0]] = wikipedia.summary(row[1])
         except wikipedia.exceptions.DisambiguationError:

@@ -6,22 +6,28 @@ dbclass: "MusicDB";
 femodule: "music_fe";
 feclass: "MusicFE";
 
-
 ruleset {
 
-    rule: InPlaylist(U, B) => PlayedNext(U,B,C^ArtistLabel?),
-    lambda: 1.0,
-    network: "config.json",
-    fefunctions: [vector("current_artist")],
-    dbfunction: "curr_next",
-    target: B;
-
-    rule: PlayedNext(U,A,B)^? => PlayedNext(U,B,C^ArtistLabel?),
+    rule: Artist(B) & Artist(C) => PlayedNext(B,C)^?,
     lambda: 1.0,
     network: "config.json",
     fefunctions: [vector("artist_1"), vector("artist_2")],
-    dbfunction: "prev_curr_next",
+    dbfunction: "curr_next_bin",
     target: B;
+
+    //rule: InPlaylist(U, B) => PlayedNext(U,B,C)^?,
+    //lambda: 1.0,
+    //network: "config.json",
+    //fefunctions: [vector("current_artist")],
+    //dbfunction: "curr_next_binary",
+    //target: B;
+
+    //rule: PlayedNext(U,A,B) & Artist(C) => PlayedNext(U,B,C)^?,
+    //lambda: 1.0,
+    //network: "config.json",
+    //fefunctions: [vector("played_1"), vector("played_2"), vector("artist_1")],
+    //dbfunction: "prev_curr_next_bin",
+    //target: B;
 
     //hardconstr: PlayedNext(U,D,E) => PlayedNext(U,D,E),
     //dbfunction: "bla";
