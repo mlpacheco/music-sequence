@@ -4,6 +4,7 @@ import json
 from drail.features import utils
 from scipy.spatial.distance import cosine
 import numpy as np
+import ml_metrics as metrics
 
 def get_folds():
     train = []; dev = []; test = []
@@ -11,12 +12,11 @@ def get_folds():
     with open(fpath) as f:
         reader = csv.reader(f)
         for row in reader:
+            dev.append((row[0], 27, 28))
+            test.append((row[0], 28, 29))
 
-            dev.append((row[0], row[26], row[27]))
-            test.append((row[0], row[27], row[28]))
-
-            for i in range(0, 26):
-                train.append((row[0], row[i], row[i+1]))
+            for i in range(20, 27):
+                train.append((row[0], i, i+1))
     return train, dev, test
 
 def load_map():
@@ -35,72 +35,85 @@ def load_map():
 
     return artist_map
 
-def top_similarity(artist_map):
-    most_similar = {}
+def baseline_prev_artist_sim(artist_map, mode='dev'):
     num_vectors, doc2vec_size, doc2vec_dic =\
         utils.embeddings_dictionary("doc2vec.bin")
 
     others = doc2vec_dic.values()
     others_id = doc2vec_dic.keys()
 
-    for j, artist in enumerate(artist_map):
-        if artist in doc2vec_dic:
-            print j, artist_map[artist]
-            vector = doc2vec_dic[artist]
+    fpath = "data/ftrain.csv"
+    with open(fpath) as f:
+        reader = csv.reader(f)
+        all_ = 0; match = 0; skipped = 0
+        for row in reader:
+            if row[28] in doc2vec_dic:
+                vector = doc2vec_dic[row[28]]
+            else:
+                skipped += 1
+                continue
             distances = [cosine(v, vector) for v in others]
-            idx = np.argpartition(distances, 10)[:11]
-            #print artist_map[artist], [artist_map[others_id[i]] for i in idx]
-            most_similar[artist] = [others_id[i] for i in idx]
-    return most_similar
-
-def baseline_prev_artist_sim(most_similar, artist_map):
-    fpath = "data/ftrain.csv"
-
-    with open(fpath) as f:
-        reader = csv.reader(f)
-        all_ = 0
-        for row in reader:
-            if row[28] in most_similar:
-                print artist_map[row[28]], "|", artist_map[row[29]]
-                print [artist_map[x] for x in most_similar[row[28]]]
-                match += int(row[29] in most_similar[row[28]])
-                all_ += 1
-    print match, "/", all_
-
-def baseline_allprev_artist_sim(artist_map):
-    out = open("baseline_avg.csv", 'wb')
-    spamwriter = csv.writer(out)
-    spamwriter.writerow(['id', 'artist'])
-    num_vectors, doc2vec_size, doc2vec_dic =\
-        utils.embeddings_dictionary("doc2vec.bin")
-
-    others = doc2vec_dic.values()
-    others_id = doc2vec_dic.keys()
-
-    fpath = "data/ftrain.csv"
-    with open(fpath) as f:
-        reader = csv.reader(f)
-        all_ = 0; match = 0
-        for row in reader:
-            prevs = [row[i] for i in range(1, 30)]
-            #print "PREVS", [artist_map[a] for a in prevs]
-            vectors = [doc2vec_dic[a] for a in prevs \
-                               if a in doc2vec_dic]
-            mean = np.mean(vectors, axis=0)
-            distances = [cosine(v, mean) for v in others]
             idx = np.argpartition(distances, 10)
-            #print idx
             most_similar = [others_id[i] for i in idx][:10]
 
-            wrow = [row[0]] + [" ".join(most_similar)]
-            spamwriter.writerow(wrow)
+            match += int(row[29] in most_similar)
+            all_ += 1
 
-            #print artist_map[row[29]]
-            #print [artist_map[x] for x in most_similar]
+    print match, "/", all_
+    print "skipped", skipped
 
-            #match += int(row[29] in most_similar)
-            #all_ += 1
-    #print match, "/", all_
+def parse_data(artist_map):
+    played_pos = {}
+    fpath = "data/ftrain.csv"
+    with open(fpath) as f:
+        reader = csv.reader(f)
+        for row in reader:
+            played_pos[row[0]] = []
+            for i in range(1, len(row)):
+                played_pos[row[0]].append(row[i])
+    return played_pos
+
+def allprev_artist_sim(artist_map, played_pos, fold, k=10):
+    num_vectors, doc2vec_size, doc2vec_dic =\
+        utils.embeddings_dictionary("doc2vec.bin")
+
+    others = doc2vec_dic.values()
+    others_id = doc2vec_dic.keys()
+
+    most_similar = {}
+    for i, (u, prev, target) in enumerate(fold):
+        print i
+        prevs = [played_pos[u][j] for j in range(prev)]
+        vectors = [doc2vec_dic[a] for a in prevs \
+                           if a in doc2vec_dic]
+        mean = np.mean(vectors, axis=0)
+        distances = [cosine(v, mean) for v in others]
+        idx = np.argsort(distances)
+        most_similar[u] = [others_id[j] for j in idx][:k]
+
+    return most_similar
+
+def measure_baseline_results(played_pos, fold, most_similar):
+    mets = []
+    for (u, prev, target) in fold:
+        actual = [played_pos[u][target-1]]
+        predicted = most_similar[u]
+        mets.append(metrics.apk(actual, predicted, 10))
+    print "Map@10", np.mean(mets)
+    return np.mean(mets)
+
+def baseline_allprev_artist_sim(artist_map, k=10):
+    played_pos = parse_data(artist_map)
+    fold = [(u, 29, 30) for u in played_pos]
+
+    most_similar = allprev_artist_sim(artist_map, played_pos, fold, k)
+    out = open("baseline_avg_corrected.csv", 'wb')
+    spamwriter = csv.writer(out)
+    spamwriter.writerow(['id', 'artist'])
+
+    for u in most_similar:
+        wrow = [u] + [" ".join(most_similar[u])]
+        spamwriter.writerow(wrow)
     out.close()
 
 def main():
@@ -109,28 +122,27 @@ def main():
     random_state = 42
     artist_map = load_map()
 
-    #most_similar = top_similarity(artist_map)
-    #sanity_check(most_similar, artist_map)
-
     baseline_allprev_artist_sim(artist_map)
     exit()
 
-    train_a = artist_map.keys()[0:2800]
-    dev_a = artist_map.keys()[2800:2800+600]
-    test_a = artist_map.keys()[2800+600:]
+    train_u, dev_u, test_u = get_folds()
+    played_pos = parse_data(artist_map)
+    most_similar_test = allprev_artist_sim(artist_map, played_pos, test_u)
+    measure_baseline_results(played_pos, test_u, most_similar_test)
+
 
     learner=LocalLearner()
     learner.compile_rules(rule_file)
     db=learner.create_dataset("data/", dbmodule_path=".")
 
-    train_u, dev_u, test_u = get_folds()
-    #db.add_filters(train_u, dev_u, test_u)
-    db.add_filters(train_a, dev_a, test_a)
+    db.add_filters(train_u, dev_u, test_u)
+
     db.set_artistmap(artist_map)
 
     learner.build_feature_extractors(db,
                                      artist_map = artist_map,
                                      doc2vec_fname="./doc2vec.bin",
+                                     ftrain="data/ftrain.csv",
                                      random_state=random_state,
                                      femodule_path=".")
 
@@ -143,6 +155,38 @@ def main():
             test_filters=["test"]
         )
 
+    test_set = db.predict(test_u, most_similar_dev)
+    weights = learner.predict_local_topK(test_set, 0, 0, 0, K=10)
+
+    results = {}
+    for rule in weights:
+        user = rule.head['arguments'][0]
+        pred = rule.head['arguments'][2]
+
+        if user not in results:
+            results[user] = {'artists':[], 'weights':[]}
+
+        results[user]['artists'].append(pred)
+        results[user]['weights'].append(weights[rule])
+
+
+
+    fpath = "data/ftrain.csv"
+    with open(fpath) as f:
+        reader = csv.reader(f)
+        all_ = 0; match = 0
+
+        for row in reader:
+            u = row[0]
+
+            idx = np.argpartition(results[u]['weights'], -10)[-10:]
+            most_relevant = [results[u]['artists'][i] for i in idx]
+
+            if artist_map[row[29]] in most_relevant:
+                match += 1
+            all_ += 1
+            #print match
+        print match, "/", all_
 
 if __name__ == "__main__":
     main()

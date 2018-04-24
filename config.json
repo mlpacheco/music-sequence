@@ -15,14 +15,15 @@
           }
         ],
         "learning_rate": 0.5,
-        "patience": 15,
+        "patience":50,
         "gradient_method": "SGD",
         "batch_size": 100,
         "momentum": 0.9,
         "epsilon": 0.000001,
         "rho": 0.000001,
         "weighted_examples": true,
-        "measurement": "acc",
+        "measurement": "f1",
+        "average": "macro",
         "use_gpu": false
       }
   ]

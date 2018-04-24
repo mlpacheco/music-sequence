@@ -4,14 +4,16 @@ from drail.features import utils
 import json
 import numpy as np
 import re
+import csv
 
 class MusicFE(FeatureExtractor):
 
     def __init__(self, artist_map, doc2vec_fname,
-                 random_state):
+                 ftrain, random_state):
         super(MusicFE, self).__init__()
         self.artist_map = artist_map
         self.doc2vec_fname = doc2vec_fname
+        self.ftrain = ftrain
         np.random.seed(random_state)
 
     def build(self):
@@ -28,6 +30,21 @@ class MusicFE(FeatureExtractor):
             if artist not in self.doc2vec_dic:
                 self.doc2vec_dic[artist] =\
                     np.random.uniform(-0.0025, 0.0025, self.doc2vec_size)
+
+        self.played_pos = {}
+        with open(self.ftrain) as f:
+            reader = csv.reader(f)
+            for row in reader:
+                self.played_pos[row[0]] = []
+                for i in range(1, len(row)):
+                    self.played_pos[row[0]].append(row[i])
+
+    def played_avg(self, rule_grd):
+        user = rule_grd.get_body_predicates("PlayedUntil")[0]['arguments'][0]
+        pos = rule_grd.get_body_predicates("PlayedUntil")[0]['arguments'][1]
+        previous = \
+            [self.doc2vec_dic[self.played_pos[user][i]] for i in range(0, pos)]
+        return np.mean(previous, axis=0)
 
     def artist_1(self, rule_grd):
         doc = rule_grd.get_body_predicates("Artist")[0]['arguments'][0]
